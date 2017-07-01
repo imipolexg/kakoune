@@ -29,6 +29,9 @@ StringView tmpdir();
 // returns pair { directory, filename }
 std::pair<StringView, StringView> split_path(StringView path);
 
+#if defined(__OpenBSD__)
+void openbsd_get_binary_path(char *bufp, unsigned long bufsz);
+#endif
 String get_kak_binary_path();
 
 bool fd_readable(int fd);

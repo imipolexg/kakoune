@@ -39,6 +39,11 @@ else ifeq ($(os),FreeBSD)
     LIBS += -ltinfow -lncursesw -lboost_regex
     CPPFLAGS += -I/usr/local/include
     LDFLAGS += -L/usr/local/lib
+else ifeq ($(os),OpenBSD)
+    LIBS += -lncursesw -lboost_regex -lpthread -lstdc++
+    CPPFLAGS += -I/usr/local/include
+    LDFLAGS += -L/usr/local/lib
+    CXX = clang
 else ifeq ($(os),Haiku)
     LIBS += -lncursesw -lboost_regex -lnetwork -lbe
 else ifeq ($(os),DragonFly)

@@ -21,6 +21,14 @@
 #include <sys/sysctl.h>
 #endif
 
+#if defined(__OpenBSD__)
+#include <sys/param.h>
+#include <sys/sysctl.h>
+#include <stdlib.h>
+#include <libgen.h>
+#include <limits.h>
+#endif
+
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #define st_mtim st_mtimespec
@@ -541,6 +549,56 @@ timespec get_fs_timestamp(StringView filename)
     return st.st_mtim;
 }
 
+#if defined(__OpenBSD__)
+void openbsd_get_binary_path(char *bufp, unsigned long bufsz)
+{
+  char sysctlbuf[4096];
+  char cwd[PATH_MAX];
+  size_t sysctlsz = sizeof(sysctlbuf);
+
+  int mib[] = {CTL_KERN, KERN_PROC_ARGS, (int)getpid(), KERN_PROC_ARGV};
+  sysctl(mib, 4, &sysctlbuf, &sysctlsz, NULL, 0);
+  char **args = (char **)sysctlbuf;
+  char *argv0 = *args;
+  size_t argv0len = (size_t)strlen(argv0);
+
+  // We have the argv[0] but that's rarely going to be an exact path
+  // But maybe it is, if so write it to the buffer and return
+  if (*argv0 == '/') {
+    snprintf(bufp, bufsz, "%s", argv0);
+    return;
+  }
+
+  getcwd(cwd, PATH_MAX);
+
+  // Is it relative to the cwd?
+  if (argv0len > 2 && strncmp(argv0, "./", 2) == 0) {
+    snprintf(bufp, bufsz, "%s/%s", cwd, basename(argv0));
+    return;
+  }
+
+  // No? so it's probably just the binary name executed in the PATH
+  // context. So see if we can find it.
+  char *path = getenv("PATH"), *pathpart;
+  do {
+    pathpart = strsep(&path, ":");
+
+    char *base = pathpart;
+    if (*pathpart == '\0') {
+      base = (char *)cwd;
+    }
+
+    snprintf(bufp, bufsz, "%s/%s", base, argv0);
+    if (access(bufp, F_OK) == 0) {
+      return;
+    }
+  } while (pathpart != NULL);
+
+  // Whichever was the last tested path will be written. So it's a best guess
+  // at that point
+}
+#endif
+
 String get_kak_binary_path()
 {
     char buffer[2048];
@@ -553,6 +611,9 @@ String get_kak_binary_path()
     int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
     size_t res = sizeof(buffer);
     sysctl(mib, 4, buffer, &res, NULL, 0);
+    return buffer;
+#elif defined(__OpenBSD__)
+    openbsd_get_binary_path(buffer, sizeof(buffer));
     return buffer;
 #elif defined(__APPLE__)
     uint32_t bufsize = 2048;
